@@ -43,7 +43,7 @@
             text-shadow: 1px 1px 4px rgba(0, 0, 0, 0.2);
         }
         
-        textarea, select, input[type="number"] {
+        textarea, select, input[type="number"], input[type="range"] {
             width: 100%;
             padding: 12px;
             font-size: 1em;
@@ -55,7 +55,7 @@
             transition: box-shadow 0.3s ease;
         }
         
-        textarea:focus, select:focus, input[type="number"]:focus {
+        textarea:focus, select:focus, input[type="number"]:focus, input[type="range"]:focus {
             box-shadow: 0px 0px 8px rgba(105, 145, 200, 0.7);
             outline: none;
         }
@@ -144,6 +144,23 @@
             from { transform: translateY(0); }
             to { transform: translateY(-5px); }
         }
+
+        #darkModeToggle {
+            margin-top: 20px;
+        }
+
+        .dark-mode {
+            background-color: #1f3548;
+            color: #ffffff;
+        }
+
+        .dark-mode .affirmation {
+            background-color: rgba(255, 255, 255, 0.2);
+        }
+
+        .dark-mode .affirmation:hover {
+            box-shadow: 0px 6px 12px rgba(255, 255, 255, 0.2);
+        }
     </style>
 </head>
 <body>
@@ -191,6 +208,13 @@
         <span id="rateValue">1.0</span>
     </div>
 
+    <h3>Volume Control</h3>
+    <div>
+        <label for="volumeRange">Adjust Volume:</label>
+        <input type="range" id="volumeRange" min="0" max="1" step="0.1" value="1">
+        <span id="volumeValue">1.0</span>
+    </div>
+
     <!-- Play All Affirmations Loop Button -->
     <button onclick="playSelectedAffirmations()">Play Selected in Loop</button><br><br>
     <!-- Play/Pause Affirmations Button -->
@@ -236,15 +260,47 @@
     <button onclick="startBinauralBeats()">Start Binaural Beats</button>
     <button onclick="stopBinauralBeats()">Stop Binaural Beats</button><br><br>
 
+    <!-- Playlist Feature -->
+    <h3>Playlists</h3>
+    <input type="text" id="playlistName" placeholder="Playlist Name">
+    <button onclick="createPlaylist()">Create Playlist</button>
+    <select id="playlistSelect"></select>
+    <button onclick="playPlaylist()">Play Playlist</button>
+    <button onclick="savePlaylist()">Save Playlist</button>
+    <button onclick="deletePlaylist()">Delete Playlist</button>
+
+    <!-- Subconscious Programming -->
+    <h3>Subconscious Programming</h3>
+    <label for="subliminalMessage">Subliminal Message:</label>
+    <input type="text" id="subliminalMessage" placeholder="Subliminal Message">
+    <label for="subliminalInterval">Interval (seconds):</label>
+    <input type="number" id="subliminalInterval" value="10">
+
+    <!-- Background Music -->
+    <h3>Background Music</h3>
+    <input type="file" id="backgroundMusic" accept="audio/*">
+    <button onclick="playBackgroundMusic()">Play Background Music</button>
+    <button onclick="stopBackgroundMusic()">Stop Background Music</button>
+
+    <!-- Dark Mode Toggle -->
+    <div id="darkModeToggle">
+        <label for="darkMode">Dark Mode:</label>
+        <input type="checkbox" id="darkMode" onchange="toggleDarkMode()">
+    </div>
+
     <script>
         let affirmations = JSON.parse(localStorage.getItem('affirmations') || '[]');
         let audioContext;
         let leftOscillator, rightOscillator;
         let playAllInterval;
-
         let isPlaying = false; // Track if affirmations are currently playing
         let currentAffirmationIndex = 0;
         let selectedAffirmations = [];
+        let playlists = JSON.parse(localStorage.getItem('playlists') || '{}');
+        let currentPlaylist = null;
+        let subliminalMessage = '';
+        let subliminalInterval = 10;
+        let backgroundMusic = null;
 
         function updateVoiceOptions() {
             const apiSelect = document.getElementById('apiSelect').value;
@@ -412,7 +468,19 @@
             utterance.voice = voices[selectedVoiceIndex];
             utterance.rate = parseFloat(document.getElementById('rateRange').value);
             utterance.pitch = parseFloat(document.getElementById('pitchRange').value);
-            utterance.volume = document.getElementById('subliminalEffect').checked ? 0.3 : 1.0;
+            utterance.volume = parseFloat(document.getElementById('volumeRange').value);
+
+            if (document.getElementById('subliminalEffect').checked) {
+                utterance.volume = 0.3;
+                setTimeout(() => {
+                    const subliminalUtterance = new SpeechSynthesisUtterance(subliminalMessage);
+                    subliminalUtterance.voice = voices[selectedVoiceIndex];
+                    subliminalUtterance.rate = parseFloat(document.getElementById('rateRange').value);
+                    subliminalUtterance.pitch = parseFloat(document.getElementById('pitchRange').value);
+                    subliminalUtterance.volume = 0.1;
+                    speechSynthesis.speak(subliminalUtterance);
+                }, subliminalInterval * 1000);
+            }
 
             utterance.onend = () => {
                 currentAffirmationIndex++;
@@ -471,7 +539,7 @@
             utterance.voice = voices[selectedVoiceIndex];
             utterance.rate = parseFloat(document.getElementById('rateRange').value);
             utterance.pitch = parseFloat(document.getElementById('pitchRange').value);
-            utterance.volume = document.getElementById('subliminalEffect').checked ? 0.3 : 1.0;
+            utterance.volume = parseFloat(document.getElementById('volumeRange').value);
             speechSynthesis.speak(utterance);
         }
 
@@ -551,8 +619,123 @@
             if (audioContext) audioContext.close();
         }
 
-        // Initialize affirmations from storage
+        // Playlist Feature
+        function createPlaylist() {
+            const playlistName = document.getElementById('playlistName').value;
+            if (!playlistName) {
+                alert("Please enter a playlist name.");
+                return;
+            }
+            playlists[playlistName] = [];
+            document.getElementById('playlistSelect').innerHTML = '';
+            for (const name in playlists) {
+                const option = document.createElement('option');
+                option.value = name;
+                option.textContent = name;
+                document.getElementById('playlistSelect').appendChild(option);
+            }
+            document.getElementById('playlistName').value = '';
+        }
+
+        function playPlaylist() {
+            const selectedPlaylist = document.getElementById('playlistSelect').value;
+            if (!selectedPlaylist) {
+                alert("Please select a playlist to play.");
+                return;
+            }
+            currentPlaylist = selectedPlaylist;
+            selectedAffirmations = playlists[selectedPlaylist];
+            if (selectedAffirmations.length === 0) {
+                alert("The selected playlist is empty.");
+                return;
+            }
+            isPlaying = true;
+            document.getElementById('playPauseButton').textContent = "Pause";
+            currentAffirmationIndex = 0;
+            playNextAffirmation();
+        }
+
+        function savePlaylist() {
+            const selectedAffirmations = Array.from(document.querySelectorAll('.affirmationCheckbox'))
+                .filter(checkbox => checkbox.checked)
+                .map(checkbox => affirmations[checkbox.getAttribute('data-index')]);
+            const playlistName = document.getElementById('playlistSelect').value;
+            if (!playlistName) {
+                alert("Please select a playlist to save.");
+                return;
+            }
+            playlists[playlistName] = selectedAffirmations;
+            localStorage.setItem('playlists', JSON.stringify(playlists));
+        }
+
+        function deletePlaylist() {
+            const selectedPlaylist = document.getElementById('playlistSelect').value;
+            if (!selectedPlaylist) {
+                alert("Please select a playlist to delete.");
+                return;
+            }
+            delete playlists[selectedPlaylist];
+            localStorage.setItem('playlists', JSON.stringify(playlists));
+            document.getElementById('playlistSelect').innerHTML = '';
+            for (const name in playlists) {
+                const option = document.createElement('option');
+                option.value = name;
+                option.textContent = name;
+                document.getElementById('playlistSelect').appendChild(option);
+            }
+        }
+
+        // Subconscious Programming
+        document.getElementById('subliminalMessage').addEventListener('input', (e) => {
+            subliminalMessage = e.target.value;
+        });
+
+        document.getElementById('subliminalInterval').addEventListener('input', (e) => {
+            subliminalInterval = parseInt(e.target.value, 10);
+        });
+
+        // Background Music
+        document.getElementById('backgroundMusic').addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = (event) => {
+                    backgroundMusic = event.target.result;
+                };
+                reader.readAsArrayBuffer(file);
+            }
+        });
+
+        function playBackgroundMusic() {
+            if (backgroundMusic) {
+                const audio = new Audio();
+                audio.src = URL.createObjectURL(new Blob([backgroundMusic]));
+                audio.loop = true;
+                audio.play();
+            }
+        }
+
+        function stopBackgroundMusic() {
+            const audio = document.querySelector('audio');
+            if (audio) {
+                audio.pause();
+                audio.src = '';
+            }
+        }
+
+        // Dark Mode Toggle
+        function toggleDarkMode() {
+            document.body.classList.toggle('dark-mode');
+        }
+
+        // Initialize affirmations and playlists from storage
         updateAffirmationList();
+        for (const name in playlists) {
+            const option = document.createElement('option');
+            option.value = name;
+            option.textContent = name;
+            document.getElementById('playlistSelect').appendChild(option);
+        }
     </script>
 </body>
 </html>
